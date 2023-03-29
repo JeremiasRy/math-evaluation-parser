@@ -1,8 +1,34 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Linq;
+using System.Text.RegularExpressions;
+
 
 static string Eval(string expression)
 {
     Regex oper = new(@"\+|\*|\/|&");
+    Regex mathFuncs = new(@"[a-z]+\s*[a-z]*");
+    Regex minusOper = new(@"-{2,}");
+    
+    MatchCollection functions = mathFuncs.Matches(expression);
+    foreach (Match match in functions)
+    {
+        if (match.Value.Contains(' '))
+        {
+            return "Error";
+        };
+    }
+    MatchCollection minusOperators = minusOper.Matches(expression);
+    foreach (Match match in minusOperators)
+    {
+        if ((match.Value.Length & 1) == 1)
+        {
+            expression = expression.Replace(match.Value, "-");
+        } else
+        {
+            expression = expression.Replace(match.Value, "");
+        }
+    }
+
+    expression = WhiteSpaceRemover(expression);
 
     while (expression.IndexOf('(') != -1)
     {
@@ -12,7 +38,8 @@ static string Eval(string expression)
         string result = EvaluateBrackets(subString);
         expression = expression.Replace(subString, result);
     }
-    string[] mathOperations = oper.Split(expression);
+    var mathOperations = oper.Matches(expression);
+    string[] mathValues = oper.Split(expression);
 
     return "= 0";
 }
@@ -63,7 +90,7 @@ static double Multiply(double left, double right) => left * right;
 static double Divide(double left, double right) => left / right;
 static double Add(double left, double right) => left + right;
 
-Eval("(-(2 + 3)* (123 + 2222)) * 4 & 2");
+Eval("  ( ---(   2 + 3)    * (123 + 2222)) * 4 & 2");
 Eval("abs(-(-1 + (2 * (4--3)))&2)");
 
 
