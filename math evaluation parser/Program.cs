@@ -33,7 +33,7 @@ static string Eval(string expression)
     {
         return "Error";
     }
-
+    //Evaluate brackets
     while (expression.IndexOf('(') != -1)
     {
         int lastOpen = expression.LastIndexOf('(');
@@ -52,7 +52,12 @@ static string EvaluateBrackets(string expression)
     Regex oper = new(@"\+|\*|\/|&|-");
     var operators = oper.Matches(expression);
     string[]? numbers = new string[2];
-    if (operators.Count > 1)
+    if (operators.Count == 3)
+    {
+        numbers = expression.Split(operators[1].Value);
+        return DoMath(operators[1].Value, numbers[0], numbers[1]);
+    }
+    if (operators.Count == 2)
     {
         numbers = expression[2..].ToString().Split(operators.Last().Value);
         if (numbers is null)
@@ -69,7 +74,7 @@ static string EvaluateBrackets(string expression)
         numbers[1] = numbers[1].Insert(0, operators.First().Value);
         return DoMath("+", numbers[0], numbers[1]);
     }
-    
+    numbers = expression.Split(operators.First().Value);
     return DoMath(operators.First().Value, numbers[0], numbers[1]);
 }
 static string DoMath(string oper, string left, string right)
