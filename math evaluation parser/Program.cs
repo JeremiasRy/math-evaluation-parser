@@ -26,7 +26,7 @@ static string Eval(string expression)
             expression = expression.Replace(match.Value, "-");
         } else
         {
-            expression = expression.Replace(match.Value, "");
+            expression = expression.Replace(match.Value, "+");
         }
     }
     if (plusOper.IsMatch(expression))
@@ -59,14 +59,18 @@ static string EvaluateBrackets(string expression)
     }
     if (operators.Count == 2)
     {
-        numbers = expression[2..].ToString().Split(operators.Last().Value);
+        numbers = expression[1..].ToString().Split(operators.Last().Value);
         if (numbers is null)
         {
             throw new Exception("Failed miserably");
         }
         numbers[0] = numbers[0].Insert(0, operators.First().Value);
-        numbers[1] = numbers[1].Insert(0, operators.Last().Value);
-        return DoMath("+" , numbers[0], numbers[1]);
+        if (operators.Last().Value == "-")
+        {
+            numbers[1] = numbers[1].Insert(0, operators.Last().Value);
+            return DoMath("+", numbers[0], numbers[1]);
+        }
+        return DoMath(operators.Last().Value , numbers[0], numbers[1]);
     }
     if (operators.Count == 1 && operators.First().Value == "-") 
     {
@@ -115,10 +119,9 @@ static double Multiply(double left, double right) => left * right;
 static double Divide(double left, double right) => left / right;
 static double Add(double left, double right) => left + right;
 
-Eval("  ( ---(   2 + 3)    * (123 - 2222)) * 4 & 2");
 Eval("abs(-(-1 + (2 * (4--3)))&2)");
+Eval("  ( ---(   2 + 3)    * (123 - 2222)) * 4 & 2");
 
 
 
-    
 
