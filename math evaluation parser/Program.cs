@@ -5,12 +5,12 @@ using System.Text.RegularExpressions;
 static string Eval(string expression)
 {
     Regex oper = new(@"\+|\*|\/|&");
-    Regex mathFuncs = new(@"[a-z]+\s*[a-z]*");
+    Regex mathFuncs = new(@"([a-z]+[a-z]+[a-z]?[a-z]?)");
     Regex minusOper = new(@"-{2,}");
     Regex plusOper = new(@"\+{2,}");
     
     MatchCollection functions = mathFuncs.Matches(expression);
-    foreach (Match match in functions)
+    foreach (Match match in functions.Cast<Match>())
     {
         if (match.Value.Contains(' '))
         {
@@ -19,7 +19,8 @@ static string Eval(string expression)
     }
     expression = WhiteSpaceRemover(expression);
     MatchCollection minusOperators = minusOper.Matches(expression);
-    foreach (Match match in minusOperators)
+
+    foreach (Match match in minusOperators.Cast<Match>())
     {
         if ((match.Value.Length & 1) == 1)
         {
@@ -29,21 +30,27 @@ static string Eval(string expression)
             expression = expression.Replace(match.Value, "+");
         }
     }
+
     if (plusOper.IsMatch(expression))
     {
         return "Error";
     }
+
     //Evaluate brackets
     while (expression.IndexOf('(') != -1)
     {
-        int lastOpen = expression.LastIndexOf('(');
-        string subString = expression[lastOpen..];
+        string subString = expression[expression.LastIndexOf('(')..];
         subString = subString[..(subString.IndexOf(')') + 1)];
         string result = EvaluateBrackets(subString[1..^1]);
         expression = expression.Replace(subString, result);
     }
+
     var mathOperations = oper.Matches(expression);
     string[] mathValues = oper.Split(expression);
+    if (expression.StartsWith(functions.First().Value))
+    {
+        return Math.Abs(int.Parse(expression.Replace(functions.First().Value, ""))).ToString();
+    }
 
     return "= 0";
 }
@@ -60,24 +67,30 @@ static string EvaluateBrackets(string expression)
     if (operators.Count == 2)
     {
         numbers = expression[1..].ToString().Split(operators.Last().Value);
+        
         if (numbers is null)
         {
             throw new Exception("Failed miserably");
         }
+
         numbers[0] = numbers[0].Insert(0, operators.First().Value);
+
         if (operators.Last().Value == "-")
         {
             numbers[1] = numbers[1].Insert(0, operators.Last().Value);
             return DoMath("+", numbers[0], numbers[1]);
         }
+        
         return DoMath(operators.Last().Value , numbers[0], numbers[1]);
     }
+
     if (operators.Count == 1 && operators.First().Value == "-") 
     {
         numbers = expression.Split(operators.First().Value);
         numbers[1] = numbers[1].Insert(0, operators.First().Value);
         return DoMath("+", numbers[0], numbers[1]);
     }
+
     numbers = expression.Split(operators.First().Value);
     return DoMath(operators.First().Value, numbers[0], numbers[1]);
 }
@@ -119,7 +132,7 @@ static double Multiply(double left, double right) => left * right;
 static double Divide(double left, double right) => left / right;
 static double Add(double left, double right) => left + right;
 
-Eval("abs(-(-1 + (2 * (4--3)))&2)");
+Eval("sqrt (s in(2 + 3)*c os (1+2)) * 4 & 2)");
 Eval("  ( ---(   2 + 3)    * (123 - 2222)) * 4 & 2");
 
 
