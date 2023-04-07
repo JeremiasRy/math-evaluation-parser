@@ -3,11 +3,13 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 var ev = new Evaluate();
 
-Console.WriteLine(ev.Eval("sin(cos(--12--2*1e+2))"));
+Console.WriteLine(ev.Eval("(-7--2*1e-3)&2"));
+Console.WriteLine(ev.Eval("(Abs(1+(2--18)-3)* sin(3 + -18) / 2.1) -12.3453* 0.45+2.4e3"));
 public class Evaluate
 {
     public string Eval(string expression)
     {
+        expression = expression.Replace(".", ",").ToLower();
         Regex functions = new(@"[a-z]{2,4}");
         string[] allowedFunctions = new string[] { "log", "ln", "exp", "sqrt", "abs", "atan", "acos", "asin", "sinh", "cosh", "tanh", "tan", "sin", "cos" };
         var funcsInExpression = allowedFunctions.Where(func => expression.Contains(func));
@@ -22,7 +24,9 @@ public class Evaluate
             var result = "";
             try
             {
-                result = CalculateExpression(brackets[1..^1]);
+                string tempExp = brackets[1..^1];
+                InitialParsing(ref tempExp);
+                result = CalculateExpression(tempExp);
             }
             catch (Exception ex)
             {
@@ -49,6 +53,7 @@ public class Evaluate
         }
         try
         {
+            InitialParsing(ref expression);
             return CalculateExpression(expression);
         }
         catch (Exception ex)
@@ -151,9 +156,30 @@ public class Evaluate
         {
             if (Array.IndexOf(splitExpression, "&") != -1)
             {
-                int index = Array.IndexOf(splitExpression, "&");
-                var result = DoMath(splitExpression[index], splitExpression[index - 1], splitExpression[index + 1]);
-                expression = expression.Replace(string.Join("", new string[] { splitExpression[index - 1], splitExpression[index], splitExpression[index + 1] }), result);
+                int index = 0;
+                int indexOfFirstPowerToCount = 0;
+                int count = 0;
+                foreach (var exp in splitExpression)
+                {
+                    if (exp == "&")
+                    {
+                        if (count > 1 && count - index == 2)
+                        {
+                            indexOfFirstPowerToCount = count;
+                        }
+                        index = count;
+                    }
+                    count++;
+                }
+                if (indexOfFirstPowerToCount != 0)
+                {
+                    var result = DoMath(splitExpression[indexOfFirstPowerToCount], splitExpression[indexOfFirstPowerToCount - 1], splitExpression[indexOfFirstPowerToCount + 1]);
+                    expression = expression.Replace(string.Join("", new string[] { splitExpression[indexOfFirstPowerToCount - 1], splitExpression[indexOfFirstPowerToCount], splitExpression[indexOfFirstPowerToCount + 1] }), result);
+                } else
+                {
+                    var result = DoMath(splitExpression[index], splitExpression[index - 1], splitExpression[index + 1]);
+                    expression = expression.Replace(string.Join("", new string[] { splitExpression[index - 1], splitExpression[index], splitExpression[index + 1] }), result);
+                } 
             }
             else if (Array.IndexOf(splitExpression, "*") != -1)
             {
@@ -175,7 +201,6 @@ public class Evaluate
             }
             splitExpression = SplitExpression(expression);
         }
-        Console.WriteLine(expression);
         return expression;
     }
     static string DoMath(string oper, string left, string right)
@@ -213,7 +238,7 @@ public class Evaluate
     {
         Regex whiteSpaceInFunctionExpression = new(@"[a-z]+\s+[a-z]+");
         Regex operOrBracket = new(@"\+|\*|\/|&|\)");
-        Regex scientific = new(@"\de\+?-?\d*");
+        Regex scientific = new(@"\d*,*\d*e\+?-?\d*");
         Regex substract = new("\\d+-\\d+");
         Regex multipleMinus = new(@"-{2,}");
         Regex multiplePlus = new(@"\+{2,}");
@@ -236,6 +261,7 @@ public class Evaluate
             foreach (Match match in matches)
             {
                 var scientificExpression = match.Value;
+                var beforeE = scientificExpression[0..scientificExpression.IndexOf('e')];
                 string exponential = "";
                 if (scientificExpression.Contains('-'))
                 {
@@ -259,7 +285,7 @@ public class Evaluate
                     {
                         return false;
                     }
-                    exponential = $"{expression[match.Index]}{new('0', amount)}";
+                    exponential = $"{beforeE.Replace(",", "")}{new('0', beforeE.Length > 1 ? amount - 1 : amount)}";
                 }
                 expression = expression.Replace(scientificExpression, exponential);
             }
@@ -276,9 +302,21 @@ public class Evaluate
         if (multipleMinus.IsMatch(expression))
         {
             var matches = multipleMinus.Matches(expression);
+            int removedAmount = 0;
             foreach (Match match in matches)
             {
-                expression = (match.Value.Length & 1) == 1 ? expression.Replace(match.Value, "-") : expression.Replace(match.Value, "");
+                var replaceValue = (match.Value.Length & 1) == 1 ? "-" : "+";
+                if (int.TryParse(expression[match.Index - removedAmount - 1].ToString(), out var result))
+                {
+                    expression = expression.Remove(match.Index - removedAmount, match.Length);
+                    expression = expression.Insert(match.Index - removedAmount, replaceValue);
+                    removedAmount += match.Length;
+                } else
+                {
+                    expression = expression.Remove(match.Index - removedAmount, match.Length);
+                    expression = expression.Insert(match.Index - removedAmount, replaceValue == "+" ? "" : replaceValue);
+                    removedAmount += match.Length;
+                }
             }
         }
         if (multiplePlus.IsMatch(expression))
@@ -295,7 +333,14 @@ public class Evaluate
         return true;
     }
     static double ParseString(string num) => double.Parse(num);
-    static double Power(double left, double right) => Math.Pow(left, right);
+    static double Power(double left, double right)
+    {
+        if (left < 0)
+        {
+            return -Math.Pow(Math.Abs(left), right);
+        }
+        return Math.Pow(left, right);
+    }
     static double Multiply(double left, double right) => left * right;
     static double Divide(double left, double right)
     {
