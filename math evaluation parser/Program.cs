@@ -1,10 +1,11 @@
 ﻿using System.Data.SqlTypes;
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 var ev = new Evaluate();
+Console.WriteLine(ev.Eval("SIN (-13)*3 -((   ((( -13   ) )  ))-1)"));
+Console.WriteLine(ev.Eval("sqrt(17&(1+1--1+-1)) -(17--2*1e-3)&2")); // Korjaa nämä
 
-Console.WriteLine(ev.Eval("(-7--2*1e-3)&2"));
-Console.WriteLine(ev.Eval("(Abs(1+(2--18)-3)* sin(3 + -18) / 2.1) -12.3453* 0.45+2.4e3"));
 public class Evaluate
 {
     public string Eval(string expression)
@@ -12,13 +13,16 @@ public class Evaluate
         expression = expression.Replace(".", ",").ToLower();
         Regex functions = new(@"[a-z]{2,4}");
         string[] allowedFunctions = new string[] { "log", "ln", "exp", "sqrt", "abs", "atan", "acos", "asin", "sinh", "cosh", "tanh", "tan", "sin", "cos" };
-        var funcsInExpression = allowedFunctions.Where(func => expression.Contains(func));
         if (!InitialParsing(ref expression))
         {
             return "Error";
         }
         while (expression.IndexOf('(') != -1)
         {
+            var funcsInExpression = allowedFunctions
+                .Where(func => new Regex(func).IsMatch(expression))
+                .Select(func => new Regex(func).Matches(expression))
+                .SelectMany(collection => collection);
             (int open, int amount) = (expression.LastIndexOf("("), expression[expression.LastIndexOf("(")..].IndexOf(")") + 1);
             var brackets = expression.Substring(open, amount);
             var result = "";
@@ -27,29 +31,39 @@ public class Evaluate
                 string tempExp = brackets[1..^1];
                 InitialParsing(ref tempExp);
                 result = CalculateExpression(tempExp);
+                if (open+amount < expression.Length && expression[open+amount] == '&')
+                {
+                    result = $"{result}b";
+                }
             }
             catch (Exception ex)
             {
                 return $"Error {ex.Message}";
             }
-
+            bool somethingWasCounted = false;
             if (funcsInExpression.Any())
             {
                 foreach (var func in funcsInExpression)
                 {
-                    int indexOfFunc = expression.IndexOf(func);
-                    if (open - indexOfFunc >= 2 && open - indexOfFunc <= 4)
+                    if (open - func.Index == func.Length)
                     {
-                        result = EvaluateFunction(func, result);
-                        expression = expression.Replace(func, "");
+                        result = EvaluateFunction(func.Value, result);
+                        expression = expression.Remove(open, brackets.Length);
+                        expression = expression.Remove(func.Index, func.Length);
+                        expression = expression.Insert(func.Index, result);
+                        somethingWasCounted = true;
                     }
                 }
+                
             }
             if (result == "Error")
             {
                 return result;
             }
-            expression = expression.Replace(brackets, result);
+            if (!somethingWasCounted)
+            {
+                expression = expression.Replace(brackets, result);
+            }
         }
         try
         {
@@ -199,6 +213,10 @@ public class Evaluate
                 var result = DoMath(splitExpression[index], splitExpression[index - 1], splitExpression[index + 1]);
                 expression = expression.Replace(string.Join("", new string[] { splitExpression[index - 1], splitExpression[index], splitExpression[index + 1] }), result);
             }
+            if (splitExpression.Length == 3)
+            {
+                return expression;
+            }
             splitExpression = SplitExpression(expression);
         }
         return expression;
@@ -221,6 +239,10 @@ public class Evaluate
                 }
             case "&":
                 {
+                    if (left.Contains('b'))
+                    {
+                        return Power(ParseString(left[..^1]), ParseString(right), leftInBrackets: true).ToString();
+                    }
                     return Power(ParseString(left), ParseString(right)).ToString();
                 }
             default:
@@ -306,16 +328,17 @@ public class Evaluate
             foreach (Match match in matches)
             {
                 var replaceValue = (match.Value.Length & 1) == 1 ? "-" : "+";
-                if (int.TryParse(expression[match.Index - removedAmount - 1].ToString(), out var result))
+                if (expression[match.Index - removedAmount - 1] == ')' || int.TryParse(expression[match.Index - removedAmount - 1].ToString(), out var result))
                 {
+                    var whatsInHere = expression[match.Index - removedAmount - 1];
                     expression = expression.Remove(match.Index - removedAmount, match.Length);
                     expression = expression.Insert(match.Index - removedAmount, replaceValue);
-                    removedAmount += match.Length;
+                    removedAmount += match.Length - replaceValue.Length;
                 } else
                 {
                     expression = expression.Remove(match.Index - removedAmount, match.Length);
                     expression = expression.Insert(match.Index - removedAmount, replaceValue == "+" ? "" : replaceValue);
-                    removedAmount += match.Length;
+                    removedAmount += match.Length - (replaceValue == "+" ? 0 : 1);
                 }
             }
         }
@@ -333,9 +356,13 @@ public class Evaluate
         return true;
     }
     static double ParseString(string num) => double.Parse(num);
-    static double Power(double left, double right)
+    static double Power(double left, double right, bool leftInBrackets = false)
     {
-        if (left < 0)
+
+        if (leftInBrackets)
+        {
+            return Math.Pow(left, right);
+        } else if (left < 0)
         {
             return -Math.Pow(Math.Abs(left), right);
         }
